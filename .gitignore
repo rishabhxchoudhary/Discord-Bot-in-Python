@@ -5,3 +5,4 @@ share
 .env
 discord.log
 __pycache__
+test

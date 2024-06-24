@@ -7,6 +7,38 @@ import random
 import asyncio
 from collections import deque
 import aiohttp
+from dotenv import load_dotenv
+import os
+import spotipy
+from spotipy.oauth2 import SpotifyClientCredentials
+import re
+load_dotenv()
+
+CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
+CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
+client_credentials_manager = SpotifyClientCredentials(client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
+sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager)
+
+
+def get_playlist_id(url):
+    pattern = r"playlist/([a-zA-Z0-9]+)"
+    match = re.search(pattern, url)
+    if match:
+        return match.group(1)
+    else:
+        return None
+
+def get_playlist_songs(playlist_id):
+    tracks_response = sp.playlist_tracks(playlist_id)
+    tracks = tracks_response["items"]
+    while tracks_response["next"]:
+        tracks_response = sp.next(tracks_response)
+        tracks.extend(tracks_response["items"])
+    songs = []
+    for i in tracks:
+        output_str = f"{i['track']['name']} by {i['track']['artists'][0]['name']}"
+        songs.append(output_str)
+    return songs
 
 def create_embed(title: str, description: str, color=discord.Color.green(), image=None, thumbnail=None) -> discord.Embed:
     embed = discord.Embed(title=title, description=description, color=color)
@@ -15,6 +47,14 @@ def create_embed(title: str, description: str, color=discord.Color.green(), imag
     if thumbnail:
         embed.set_thumbnail(url=thumbnail)
     return embed
+
+def get_spotify_songs(url):
+    playlist_id = get_playlist_id(url)
+    if playlist_id:
+        songs = get_playlist_songs(playlist_id)
+        return songs
+    else:
+        return False
 
 async def ytbettersearch(query):
     url = f"https://www.youtube.com/results?search_query={query}"
@@ -55,7 +95,21 @@ class Music(commands.Cog, name="music"):
             await context.author.voice.channel.connect()
         except:
             pass
-        
+        voice = context.voice_client
+        if "spotify" in url:
+            songs = get_spotify_songs(url)
+            print(songs)
+            if not songs:
+                embed = discord.Embed(title="Error", description="Invalid Spotify Playlist URL.", color=discord.Color.red())
+                return await context.send(embed=embed)
+            for song in songs:
+                self.queue.append(song)
+            if voice.is_playing() or voice.is_paused():
+                embed = discord.Embed(title="Added to Queue", description=f"Added {len(songs)} songs to the queue.", color=discord.Color.green())
+                await context.send(embed=embed)
+            else:
+                await self.next(context)
+            return
         url = await ytbettersearch(url)
         ydl_opts = {
             'format': 'bestaudio/best',
@@ -75,7 +129,6 @@ class Music(commands.Cog, name="music"):
                 'thumbnail': info['thumbnail']
             }
         
-        voice = context.voice_client
         if voice.is_playing() or voice.is_paused():
             self.queue.appendleft(song)
             embed = discord.Embed(title="Added to Queue", description=f"Added {song['title']} to the queue.", color=discord.Color.green())
@@ -95,7 +148,6 @@ class Music(commands.Cog, name="music"):
         await context.send(embed=create_embed("Now Playing", f"Playing {song['title']}", thumbnail=song['thumbnail']))
 
     async def _on_song_end(self,context):
-        print("In on song end")
         if self.on_loop:
             voice = get(self.bot.voice_clients, guild=context.guild)
             await self.play_audio(context,voice,self.current_song)
@@ -104,13 +156,31 @@ class Music(commands.Cog, name="music"):
 
     @commands.command(name="next", description="Play the next song in the queue.")
     async def next(self, context: Context) -> None:
-        print("In next")
         voice = get(self.bot.voice_clients, guild=context.guild)
         if voice.is_playing() or voice.is_paused():
             self.on_loop = False
             voice.stop()
         if self.queue:
             next_song = self.queue.popleft()
+            # if next song is a string
+            if isinstance(next_song, str):
+                next_song = await ytbettersearch(next_song)
+                ydl_opts = {
+                    'format': 'bestaudio/best',
+                    'quiet': True,
+                    'postprocessors': [{
+                        'key': 'FFmpegExtractAudio',
+                        'preferredcodec': 'mp3',
+                        'preferredquality': '192',
+                    }],
+                }
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(next_song, download=False)
+                    next_song = {
+                        'url': info['url'],
+                        'title': info['title'],
+                        'thumbnail': info['thumbnail']
+                }
             await self.play_audio(context, voice, next_song)
         else:
             self.current_song = None
@@ -176,7 +246,14 @@ class Music(commands.Cog, name="music"):
         if not self.queue:
             embed = discord.Embed(title="Queue", description="There are no songs in the queue.", color=discord.Color.red())
             return await context.send(embed=embed)
-        embed = discord.Embed(title="Queue", description="```" + "\n".join([song["title"] for song in self.queue]) + "```", color=discord.Color.green())
+        embed = discord.Embed(title="Queue", color=discord.Color.green())
+        for i, song in enumerate(self.queue):
+            if i==24:
+                break
+            if isinstance(song, dict):
+                embed.add_field(name=f"{i + 1}. {song['title']}", inline=False)
+            else:
+                embed.add_field(name=f"{i + 1}. {song}", inline=False)
         await context.send(embed=embed)
     
     @commands.command(name="shuffle", description="Shuffle the queue.")
