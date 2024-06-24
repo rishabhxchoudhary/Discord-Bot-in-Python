@@ -95,8 +95,7 @@ class Music(commands.Cog, name="music"):
         await context.send(embed=create_embed("Now Playing", f"Playing {song['title']}", thumbnail=song['thumbnail']))
 
     async def _on_song_end(self,context):
-        print("Song ended")
-        print(self.on_loop)
+        print("In on song end")
         if self.on_loop:
             voice = get(self.bot.voice_clients, guild=context.guild)
             await self.play_audio(context,voice,self.current_song)
@@ -105,8 +104,11 @@ class Music(commands.Cog, name="music"):
 
     @commands.command(name="next", description="Play the next song in the queue.")
     async def next(self, context: Context) -> None:
+        print("In next")
         voice = get(self.bot.voice_clients, guild=context.guild)
-        self.on_loop = False
+        if voice.is_playing() or voice.is_paused():
+            self.on_loop = False
+            voice.stop()
         if self.queue:
             next_song = self.queue.popleft()
             await self.play_audio(context, voice, next_song)
@@ -162,6 +164,11 @@ class Music(commands.Cog, name="music"):
     @commands.command(name="leave", description="Leave the voice channel.")
     async def leave(self, context: Context) -> None:
         voice_client = context.message.guild.voice_client
+        if voice_client:
+            self.queue.clear()
+            self.is_playing = False
+            self.current_song = None
+            self.on_loop = False
         await voice_client.disconnect()
 
     @commands.command(name="queue", description="Show the current queue.")
