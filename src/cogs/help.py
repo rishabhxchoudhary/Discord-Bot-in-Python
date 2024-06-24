@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
 from discord.ext.commands import Context
+import asyncio
 
 class Paginator:
     def __init__(self, bot):
@@ -34,8 +35,6 @@ class Paginator:
             except:
                 break
 
-
-
 class Help(commands.Cog, name="help"):
     def __init__(self, bot) -> None:
         self.bot = bot
@@ -65,6 +64,40 @@ class Help(commands.Cog, name="help"):
 
         paginator = Paginator(self.bot)
         await paginator.paginate(context, pages)
+
+    @commands.command(name="clear", description="clears the chat", hidden=True)
+    async def clear(ctx, *, n: int):
+        try:
+            if n < 10001:
+                count = n//100
+                rem = n % 100
+                for i in range(count):
+                    messages = []
+                    async for message in ctx.channel.history(limit=100):
+                        messages.append(message)
+                    await ctx.channel.delete_messages(messages)
+                    await asyncio.sleep(1.2)
+                messages = []
+                async for message in ctx.channel.history(limit=(rem+1)):
+                    messages.append(message)
+                await ctx.channel.delete_messages(messages)
+                k = str(ctx.message.author)+' deleted '+str(n)+' messages.'
+                async with ctx.typing():
+                    embed = discord.Embed(
+                        title="Clear", description=k, colour=discord.Color.green())
+                m = await ctx.send(embed=embed)
+                await asyncio.sleep(3)
+                await ctx.channel.delete_messages([m])
+            else:
+                async with ctx.typing():
+                    embed = discord.Embed(
+                        title="Error", description='Cannot clear more than 10,000 msgs at once.', colour=discord.Color.red())
+                await ctx.send(embed=embed)
+        except:
+            async with ctx.typing():
+                embed = discord.Embed(
+                    title="Error", description='Permission Error.', colour=discord.Color.red())
+            await ctx.send(embed=embed)
 
 
 async def setup(bot) -> None:

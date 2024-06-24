@@ -32,8 +32,6 @@ async def ytbettersearch(query):
     url = f"https://www.youtube.com/{url}"
     return url
 
-
-
 class Music(commands.Cog, name="music"):
     def __init__(self, bot) -> None:
         self.bot = bot
@@ -97,14 +95,18 @@ class Music(commands.Cog, name="music"):
         await context.send(embed=create_embed("Now Playing", f"Playing {song['title']}", thumbnail=song['thumbnail']))
 
     async def _on_song_end(self,context):
+        print("Song ended")
+        print(self.on_loop)
         if self.on_loop:
-            await self.play_audio(context, self.current_song)
+            voice = get(self.bot.voice_clients, guild=context.guild)
+            await self.play_audio(context,voice,self.current_song)
         else:
             await self.next(context)
 
     @commands.command(name="next", description="Play the next song in the queue.")
     async def next(self, context: Context) -> None:
         voice = get(self.bot.voice_clients, guild=context.guild)
+        self.on_loop = False
         if self.queue:
             next_song = self.queue.popleft()
             await self.play_audio(context, voice, next_song)
@@ -131,8 +133,10 @@ class Music(commands.Cog, name="music"):
         else:
             await context.send(embed=create_embed("Error", "No music Paused or some error occurred."))
 
-    @commands.command(name="stop", description="Stop the currently playing song.")
+    @commands.command(name="stop", description="Stop the currently playing song and clears the queue.")
     async def stop(self, context: Context) -> None:
+        self.queue.clear()
+        self.current_song = None
         voice = get(self.bot.voice_clients, guild=context.guild)
         if (voice and voice.is_paused()) or (voice and voice.is_playing()):
             voice.stop()
@@ -151,7 +155,7 @@ class Music(commands.Cog, name="music"):
             embed = discord.Embed(title="Error", description="There is no music playing right now.", color=discord.Color.red())
             return await context.send(embed=embed)
         title = self.current_song["title"]
-        embed = discord.Embed(title=f"Now Playing: {title}", color=discord.Color.green())
+        embed = discord.Embed(title=f"Now Playing",description=f"{title}", color=discord.Color.green())
         embed.set_thumbnail(url=self.current_song["thumbnail"])
         await context.send(embed=embed)
 
@@ -166,12 +170,6 @@ class Music(commands.Cog, name="music"):
             embed = discord.Embed(title="Queue", description="There are no songs in the queue.", color=discord.Color.red())
             return await context.send(embed=embed)
         embed = discord.Embed(title="Queue", description="```" + "\n".join([song["title"] for song in self.queue]) + "```", color=discord.Color.green())
-        await context.send(embed=embed)
-
-    @commands.command(name="clear", description="Clear the queue.")
-    async def clear(self, context: Context) -> None:
-        self.queue.clear()
-        embed = discord.Embed(title="Queue Cleared", description="The queue has been cleared.", color=discord.Color.green())
         await context.send(embed=embed)
     
     @commands.command(name="shuffle", description="Shuffle the queue.")
@@ -201,5 +199,6 @@ class Music(commands.Cog, name="music"):
         else:
             embed = discord.Embed(title="Loop", description="Stopped looping the current song.", color=discord.Color.red())
         await context.send(embed=embed)
+
 async def setup(bot) -> None:
     await bot.add_cog(Music(bot))
