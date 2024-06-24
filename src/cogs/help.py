@@ -65,8 +65,8 @@ class Help(commands.Cog, name="help"):
         paginator = Paginator(self.bot)
         await paginator.paginate(context, pages)
 
-    @commands.command(name="clear", description="clears the chat", hidden=True)
-    async def clear(ctx, *, n: int):
+    @commands.command(name="clear", description="clears the chat")
+    async def clear(self,ctx, *, n: int):
         try:
             if n < 10001:
                 count = n//100
