@@ -145,7 +145,6 @@ class Music(commands.Cog, name="music"):
         }
         self.player = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(song['url'], **ffmpeg_options))
         voice.play(self.player, after=lambda e: asyncio.run_coroutine_threadsafe(self._on_song_end(context), self.bot.loop))
-        
         await context.send(embed=create_embed("Now Playing", f"Playing {song['title']}", thumbnail=song['thumbnail']))
 
     async def _on_song_end(self,context):
@@ -153,14 +152,16 @@ class Music(commands.Cog, name="music"):
             voice = get(self.bot.voice_clients, guild=context.guild)
             await self.play_audio(context,voice,self.current_song)
         else:
-            await self.next(context)
+            await self.next(context,check = True)
 
     @commands.command(name="next", description="Play the next song in the queue.")
-    async def next(self, context: Context) -> None:
+    async def next(self, context: Context,check=False) -> None:
         voice = get(self.bot.voice_clients, guild=context.guild)
         if voice.is_playing() or voice.is_paused():
-            self.on_loop = False
             voice.stop()
+            self.on_loop = False
+            if check:
+                return
         if self.song_queue:
             next_song = self.song_queue.popleft()
             if isinstance(next_song, str):
