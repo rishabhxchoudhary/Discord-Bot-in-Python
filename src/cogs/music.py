@@ -12,8 +12,10 @@ import os
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 import re
-load_dotenv()
 
+from cogs.help import Paginator
+
+load_dotenv()
 CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
 CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
 client_credentials_manager = SpotifyClientCredentials(client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
@@ -75,7 +77,7 @@ async def ytbettersearch(query):
 class Music(commands.Cog, name="music"):
     def __init__(self, bot) -> None:
         self.bot = bot
-        self.queue = deque()
+        self.song_queue = deque()
         self.is_playing = False
         self.player = None
         self.current_song = None
@@ -98,12 +100,11 @@ class Music(commands.Cog, name="music"):
         voice = context.voice_client
         if "spotify" in url:
             songs = get_spotify_songs(url)
-            print(songs)
             if not songs:
                 embed = discord.Embed(title="Error", description="Invalid Spotify Playlist URL.", color=discord.Color.red())
                 return await context.send(embed=embed)
             for song in songs:
-                self.queue.append(song)
+                self.song_queue.append(song)
             if voice.is_playing() or voice.is_paused():
                 embed = discord.Embed(title="Added to Queue", description=f"Added {len(songs)} songs to the queue.", color=discord.Color.green())
                 await context.send(embed=embed)
@@ -130,7 +131,7 @@ class Music(commands.Cog, name="music"):
             }
         
         if voice.is_playing() or voice.is_paused():
-            self.queue.appendleft(song)
+            self.song_queue.appendleft(song)
             embed = discord.Embed(title="Added to Queue", description=f"Added {song['title']} to the queue.", color=discord.Color.green())
             await context.send(embed=embed)
         else:
@@ -160,9 +161,8 @@ class Music(commands.Cog, name="music"):
         if voice.is_playing() or voice.is_paused():
             self.on_loop = False
             voice.stop()
-        if self.queue:
-            next_song = self.queue.popleft()
-            # if next song is a string
+        if self.song_queue:
+            next_song = self.song_queue.popleft()
             if isinstance(next_song, str):
                 next_song = await ytbettersearch(next_song)
                 ydl_opts = {
@@ -207,7 +207,7 @@ class Music(commands.Cog, name="music"):
 
     @commands.command(name="stop", description="Stop the currently playing song and clears the queue.")
     async def stop(self, context: Context) -> None:
-        self.queue.clear()
+        self.song_queue.clear()
         self.current_song = None
         voice = get(self.bot.voice_clients, guild=context.guild)
         if (voice and voice.is_paused()) or (voice and voice.is_playing()):
@@ -235,7 +235,7 @@ class Music(commands.Cog, name="music"):
     async def leave(self, context: Context) -> None:
         voice_client = context.message.guild.voice_client
         if voice_client:
-            self.queue.clear()
+            self.song_queue.clear()
             self.is_playing = False
             self.current_song = None
             self.on_loop = False
@@ -243,32 +243,37 @@ class Music(commands.Cog, name="music"):
 
     @commands.command(name="queue", description="Show the current queue.")
     async def queue(self, context: Context) -> None:
-        if not self.queue:
+        if not self.song_queue:
             embed = discord.Embed(title="Queue", description="There are no songs in the queue.", color=discord.Color.red())
             return await context.send(embed=embed)
-        embed = discord.Embed(title="Queue", color=discord.Color.green())
-        for i, song in enumerate(self.queue):
-            if i==24:
-                break
-            if isinstance(song, dict):
-                embed.add_field(name=f"{i + 1}. {song['title']}", inline=False)
-            else:
-                embed.add_field(name=f"{i + 1}. {song}", inline=False)
-        await context.send(embed=embed)
+        pages = []
+        for i in range(0, len(self.song_queue), 5):
+            embed = discord.Embed(title="Queue", description="List of songs in the queue:", color=discord.Color.green())
+            for j in range(i, i + 5):
+                if j >= len(self.song_queue):
+                    break
+                song = self.song_queue[j]
+                if isinstance(song, dict):
+                    embed.add_field(name=f"{j + 1}. {song['title']}", value="",inline=False)
+                else:
+                    embed.add_field(name=f"{j + 1}. {song}", value="",inline=False)
+            pages.append(embed)
+        paginator = Paginator(self.bot)
+        await paginator.paginate(context, pages)
     
     @commands.command(name="shuffle", description="Shuffle the queue.")
     async def shuffle(self, context: Context) -> None:
-        random.shuffle(self.queue)
+        random.shuffle(self.song_queue)
         embed = discord.Embed(title="Queue Shuffled", description="The queue has been shuffled.", color=discord.Color.green())
         await context.send(embed=embed)
     
     @commands.command(name="remove", description="Remove a song from the queue.")
     async def remove(self, context: Context, index: int) -> None:
-        if index < 1 or index > len(self.queue):
+        if index < 1 or index > len(self.song_queue):
             embed = discord.Embed(title="Error", description="Invalid index.", color=discord.Color.red())
             return await context.send(embed=embed)
-        song = self.queue[index - 1]
-        self.queue.remove(song)
+        song = self.song_queue[index - 1]
+        self.song_queue.remove(song)
         embed = discord.Embed(title="Song Removed", description=f"Removed {song['title']} from the queue.", color=discord.Color.green())
         await context.send(embed=embed)
 

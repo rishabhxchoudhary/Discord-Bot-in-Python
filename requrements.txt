@@ -3,3 +3,4 @@ discord.py
 pyNaCl
 yt_dlp
 python-dotenv
+spotipy
