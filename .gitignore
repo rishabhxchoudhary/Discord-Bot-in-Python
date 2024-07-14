@@ -6,3 +6,4 @@ share
 discord.log
 __pycache__
 test
+.venv

@@ -9,6 +9,9 @@ import logging
 import platform
 import random
 
+# to run in background : nohup python /Users/rishabh/Desktop/bot/src/bot.py &
+# to kill the process : ps aux | grep bot.py
+#                       kill <pid>
 
 if not os.path.isfile(f"{os.path.realpath(os.path.dirname(__file__))}/config.json"):
     sys.exit("'config.json' not found! Please add it and try again.")
